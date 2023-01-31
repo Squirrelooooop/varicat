@@ -8,19 +8,16 @@ install.packages("ggraph")
 ```
 
 ```{r}
-#library(ggraph) 
+library(ggraph) 
 library(igraph)
 library(cli)
 library(dplyr)
-#library(tidyverse) 
+library(tidyverse) 
 library(data.tree) # for making the 'ontology' data structure
 library(rlang)
 library(networkD3) # for making interactive viz
-#library(htmlwidgets) # for editing the Javascript code for viz
 library(htmltools)
-library(stringr)
-
-
+library(stringr)  
 ```
 
 ```{r}
@@ -39,7 +36,6 @@ paste5 <- function(..., sep = " ", collapse = NULL, na.rm = F) {
       }
       df <- data.frame(..., stringsAsFactors = F)
       ret <- apply(df, 1, FUN = function(x) paste.na(x, sep))
-
       if (is.null(collapse))
         ret
       else {
@@ -47,21 +43,7 @@ paste5 <- function(..., sep = " ", collapse = NULL, na.rm = F) {
       }
     }
 }
-
-c20 <- c(
-  "dodgerblue2", "#E31A1C", # red
-  "green4", "magenta",
-  "#6A3D9A", # purple
-  "#FF7F00", # orange
-  "violet", "turquoise",
-  "skyblue2", "darkgreen", # lt pink
-  "palegreen2",
-  "#CAB2D6", # lt purple
-  "#FDBF6F", # lt orange
-  "gray70", "khaki2",
-  "maroon", "orchid3", "deeppink", "blue1", "steelblue4"
-)
-
+ 
 ```
  
 ## Read Ontology file with all varicat vars
@@ -73,11 +55,10 @@ rev_df <- apply(varicat_ontology, 2, rev) # r
 # converting the result to dataframe
 rev_df <- as.data.frame(rev_df) %>% mutate_all(., list(~na_if(.,"")))
 rev_df <- as.data.frame(apply(rev_df,2, str_trim)) %>% arrange(level1) # remove trailing spaces
-
 # subset(rev_df,duplicated(level3)) #check if there are duplicats in lvl 3 except for NAs
 ```
 
-### Make ontology
+### Make ontology with data.tree
 ```{r}
 # create pathString to make the data tree@
 rev_df$pathString <- paste5(rev_df$level0, 
@@ -90,7 +71,10 @@ rev_df$pathString <- paste5(rev_df$level0,
 ontology <- as.Node(rev_df, na.rm=TRUE) # create data.tree obj
 g <- as.igraph(ontology, direction = "climb")  %>% delete_vertices("Variable")  #%>%  delete_edges( c(1:10))  - can be used to delete vertices with string NA
 # fc <- cluster_walktrap(g)    
+``` 
 
+### Visualize ontology with ForceNetwork
+```{r}
 code_temp <- rev_df %>% 
    arrange(level1, level2) %>% 
    mutate(l1_id = (factor(level1))) # factor the domain name to show it as legend names and color vars by the domain it belongs to
@@ -121,55 +105,17 @@ htmlwidgets::onRender(fn, jsCode = '
 ') %>% saveNetwork(file = 'varicat_ontology.html')
 
 # http://curleylab.psych.columbia.edu/netviz/netviz2.html#/20 
+
+inflam_d3
+
+d3
+
 ```
 
-# Make non-interactive ggraph 
+### Inflammaging dataset
 ```{r}
-# === Helper function set_color ====
-set_color <- function(level1_group, grp_color) {
- level2_3 <- rev_df %>% filter(level1 == level1_group)   %>% dplyr::select(level2, level3) %>% as.list() 
- level2_3 <-  (unlist(level2_3, use.names = FALSE))
- level2_3 <- level2_3[!is.na(level2_3)]  # select level 2 and 3 vars that belong to a given level 1 category
- same_category <- c(level1_group, level2_3)
- V(g)[V(g )$name %in% same_category]$color <- adjustcolor(grp_color, 0.5) # color level 1 and its sub- levels 2 and 3 the same color
- return(g) }
+#### Reshape Inflammaging df to conform to ontology
 
-e <- get.edgelist(g,names=FALSE)
-l <- qgraph.layout.fruchtermanreingold(e,vcount=vcount(g))
-
-# run for loop to color each category
-level1_list<- unique(rev_df$level1) 
-for (x in 1:20) {
- g <- set_color(levels(factor(level1_list))[x], c20[x]) 
- } 
-
-tiff("varicat_test.tiff", units="in", width=35, height=35, res=250) 
-plot(g, layout= l ,  
-     # ==== vertex ====
-    vertex.frame.color = "white",
-    vertex.size=1.25, 
-    vertex.shape="circle",
-    # ==== label ====
-    vertex.label.cex=0.5, 
-    vertex.label.family="Helvetica",
-    vertex.label.font=2,
-    vertex.label.color="black",
-   #  set.vertex.attribute(az, "name", value=paste("y",1:27,sep=""))
-     #vertex.label.dist=0.25, 
-
-    # ==== edges ====
-    edge.color="grey",                           # Edge color
-     edge.width=0.5,
-     edge.arrow.size = 0.5 ,
-     edge.lty="dotdash",
-      #edge.labels=T
-    )   
-legend("topleft",bty = "n",
-       legend=levels(factor(level1_list)), fill= adjustcolor(c20, 0.5), border=NA)
-dev.off() 
-```
-#### Reshape inflammaging df to conform to ontology
-```{r}
 inflam <- read.csv("inflammaging_varicat.csv", sep=",", header=TRUE)
 
 colnames_inflam <- colnames(inflam) # get col names 
@@ -188,51 +134,45 @@ inflam_2_cols <- cbind(inflam[1], mycol = do.call(pmax, c(inflam[-1], na.rm = TR
 # inflam_subSet %>% dplyr::select(Comorbidities.type., Physical.health.type.) %>% filter(Physical.health.type. == "Comorbidities", !is.na(Comorbidities.type.)) # 120 vars
 # inflam_subSet %>% dplyr::select(Comorbidities.type., Physical.health.type.) %>% filter(Physical.health.type. == "Comorbidities", is.na(Comorbidities.type.)) # 31 vars 
 ```
-### Ontology in short-form/numeric code == Issues due to non-unique node names == 
+
 ```{r}
-#level1_n <- rev_df %>% group_by(level1) %>% tally() # e.g., Clinical characteristics 
-#level2_n <- rev_df %>% group_by(level1, level2) %>% tally() # e.g., Under clinical charac -> Current diagnosis (11), Current inpatient vs outpatient status (1)
-
-# l1 <- rep(LETTERS[1:length(level1_n$n)], as.vector(level1_n$n))
-# l2 <- unlist(lapply(level2_n$n, function(x){as.vector(1:x)}))
-# l3 <- unlist(lapply(level2_n$n, function(x){as.vector(1:x)}))
-
-code_df <- rev_df %>% dplyr::select(level0, level1, level2, level3)
-
-code_df <- code_df %>% 
-  rowwise() %>% 
-  arrange(level1, level2) %>% 
-  mutate(l1_id = str_replace(level1, "-", " ")) %>%  
-  mutate(l1_id = paste(
-    unlist(
-      lapply((str_split(l1_id, ' ')), function(x){
-        str_to_title(str_sub(x, 1, 4))
-      })
-    ), collapse = ""))   
- 
-code_df <- code_df %>% 
-   arrange(level1, level2) %>% 
-   group_by(level1) %>%
-   mutate(l2_id = as.numeric(factor(level2)))  
-
-code_df <- code_df %>% 
-   group_by(level1, level2) %>%
-   mutate(l3_id = as.numeric(factor(level3)))  %>%
-     arrange(level1, level2, level3)  
-
-code_df <- code_df %>% ungroup() %>% dplyr::select(level0, l1_id, l2_id, l3_id)
- 
-code_df$level0 <- (code_df$level0)
- code_df$pathString <- paste5(code_df$level0, 
-                            code_df$l1_id, 
-                            code_df$l2_id, 
-                            code_df$l3_id,
-                            sep = "/", na.rm=TRUE
-                            )  
+### Ontology in short-form/numeric code == Issues due to non-unique node names == 
+# code_df <- rev_df %>% dplyr::select(level0, level1, level2, level3)
+# 
+# code_df <- code_df %>% 
+#   rowwise() %>% 
+#   arrange(level1, level2) %>% 
+#   mutate(l1_id = str_replace(level1, "-", " ")) %>%  
+#   mutate(l1_id = paste(
+#     unlist(
+#       lapply((str_split(l1_id, ' ')), function(x){
+#         str_to_title(str_sub(x, 1, 4))
+#       })
+#     ), collapse = ""))   
+#  
+# code_df <- code_df %>% 
+#    arrange(level1, level2) %>% 
+#    group_by(level1) %>%
+#    mutate(l2_id = as.numeric(factor(level2)))  
+# 
+# code_df <- code_df %>% 
+#    group_by(level1, level2) %>%
+#    mutate(l3_id = as.numeric(factor(level3)))  %>%
+#      arrange(level1, level2, level3)  
+# 
+# code_df <- code_df %>% ungroup() %>% dplyr::select(level0, l1_id, l2_id, l3_id)
+#  
+# code_df$level0 <- (code_df$level0)
+#  code_df$pathString <- paste5(code_df$level0, 
+#                             code_df$l1_id, 
+#                             code_df$l2_id, 
+#                             code_df$l3_id,
+#                             sep = "/", na.rm=TRUE
+#                             )  
  
 ```
 
-
+### Data cleaning for inflammaging dataset
 ```{r}
 all_levels<-read.csv("all_levels_names.csv") 
 # level names that do not belong to any categories in the ontology (this is weird, need to check)
@@ -241,7 +181,10 @@ inflam_2_cols[!inflam_2_cols$mycol %in% c(all_levels$level2) &
                  !inflam_2_cols$mycol %in% c(all_levels$level3),] %>% group_by(mycol) %>% tally() 
 inflam_2_cols <- inflam_2_cols [!inflam_2_cols$mycol %in% c("Drug name", "Miscellaneous", "Number of conditions", "Severity score"), ]
 
-inflam_2_cols%>% group_by(Domain.Main.category.of.the.variable., mycol) %>% tally()  #=== THIS IS CORRECT ====
+#inflam_2_cols%>% group_by(Domain.Main.category.of.the.variable., mycol) %>% tally()  #=== THIS IS CORRECT ====
+
+inflam_2_cols <- inflam_2_cols %>% mutate(Domain.Main.category.of.the.variable.=  case_when(mycol == "Physical Measurements" & Domain.Main.category.of.the.variable. == "Physiological" ~ "Physical health", 
+                                                                                            TRUE ~ Domain.Main.category.of.the.variable. ))   
  
 # looks like these levels are actually level 4 categories -> remove them 
 # group by level2 and 3 names and count the number vars in each of levels 
@@ -277,8 +220,8 @@ inflam_level_2_3_split <- inflam_level_2_3_split %>% mutate(level2 = case_when(
   level3 %in% global ~ "Global",
   level3 %in% dep_eps_course ~ "Depressive episode course",
   level3 %in% manic_eps_course ~ "Manic episode course",
-  level3 %in% hypomanic_eps_course ~ "Hypomanic episode features",
-  level3 %in% mixed_eps_course ~ "Mixed episode features",
+  level3 %in% hypomanic_eps_course ~ "Hypomanic episode course",
+  level3 %in% mixed_eps_course ~ "Mixed episode course",
   level3 %in% general_eps_features ~ "General episodic features",
   level3 %in% hopsitalizations ~ "Hopsitalizations",
   level3 %in% functioning ~ "Functioning",
@@ -289,6 +232,7 @@ inflam_level_2_3_split <- inflam_level_2_3_split %>% mutate(level2 = case_when(
   TRUE ~ level2))
 ```
 
+### Visualize inflammaging ontology with ForceNetwork
 ```{r}
 inflam_combined_n <- cbind(inflam_level_2_3_split[c(1,2,4)], mycol = do.call(pmax, c(inflam_level_2_3_split['level2_n'] , inflam_level_2_3_split['level3_n'], na.rm = TRUE))) %>% arrange(Domain)
 inflam_combined_n <- inflam_combined_n %>% mutate(level2 = case_when(Domain == 'Current pharmacological treatment' & level3 == 'Total psychiatric medications (count)' ~ "Current Drug Class",
@@ -302,6 +246,7 @@ inflam_combined_n <- inflam_combined_n %>% mutate(level2 = case_when(Domain == '
                                                   Domain == "Course of non-bipolar psychiatric illness" & level3 == 'CoNBDpi Other' ~ "CoNBDpi O.",
                                                   Domain == "Metadata" & level3 == 'Metadata Other' ~ "Metadata O.",
                                                   Domain == "Current pharmacological treatment" & level3 == 'C PT Other' ~ "C PT O.",
+                                                   Domain == "Physiological" & level2 == 'Physical Measurements' ~ "C PT O.",
                                                    TRUE ~level2))%>% mutate(level3 = str_replace_all(level3, "/", " "), 
                                                                            level2 = str_replace_all(level2, "/", " "), 
                                                                            Domain = str_replace_all(Domain, "/", " ")) %>% distinct()
@@ -313,26 +258,107 @@ inflam_combined_n$pathString <- paste5(inflam_combined_n$level0,
                             inflam_combined_n$level3,
                             sep = "/", na.rm=TRUE
                             )  
- 
+inflam_combined_n <-  inflam_combined_n %>% arrange(Domain, level2, level3)
+inflam_combined_n   %>% arrange(level2, level3)
 #inflam_ontology <- FromDataFrameTable(inflam_combined_n, colLevels = list( c("mycol")), na.rm = TRUE)
 inflam_ontology <- as.Node( inflam_combined_n)
 
 print(inflam_ontology, "mycol")
-g <- as.igraph(inflam_ontology, direction = "climb") # %>% delete_vertices("Variable")  #%>%  delete_edges( c(1:10))  - can be used to delete vertices with string NA
-d3 <- igraph_to_networkD3(g) 
-# fc <- cluster_walktrap(g)    
+inflam_g <- as.igraph(inflam_ontology, direction = "climb")  %>% delete_vertices("Var")  #%>%  delete_edges( c(1:10))  - can be used to delete vertices with string NA
+
+inflam_code_temp <- inflam_combined_n %>% 
+   arrange(Domain, level2) %>% 
+   mutate(l1_id = (factor(Domain))) # factor the domain name to show it as legend names and color vars by the domain it belongs to
 
 
+inflam_code_temp <- bind_rows(inflam_code_temp[c("Domain", "l1_id")], inflam_code_temp[c( "level2" ,"l1_id")], inflam_code_temp[c("level3","l1_id")]) # create new df grouped by the domain
+membership_custom <- cbind(inflam_code_temp[2], name = do.call(pmax, c(inflam_code_temp[-2], na.rm = TRUE))) %>% distinct() %>% drop_na()  %>% arrange(name) 
+
+inflam_d3 <- igraph_to_networkD3(inflam_g)
+membership_custom <-  merge(inflam_d3$nodes, membership_custom, on= "name") # merge node df and the new df grouped by domain to get desired color groupings
+inflam_d3$nodes <-  membership_custom[match(inflam_d3$nodes$name, membership_custom$name),] # order vars according to the data.tree obj's original order
 
 
-inflam_combined_n[duplicated(inflam_combined_n$pathString),]
-rev_df
+inflam_fn <- forceNetwork(Links = inflam_d3$links, Nodes = inflam_d3$nodes ,
+             Source = 'source', Target = 'target', NodeID = 'name',  Group = 'l1_id', # get node id and group from d3$node
+            opacity = 0.9,  zoom = TRUE, legend = TRUE, linkDistance = 25, radiusCalculation = 1.5, 
+             charge = -15,   # node repulsion 
+             fontSize = 25, fontFamily = "Calibri", 
+             ) 
+
+ inflam_fn %>% saveNetwork("inflam_net.html")
 ```
 
 
- 
- 
+# Non-interactive Igraph 
+```{r}
 
+c20 <- c(
+  "dodgerblue2", "#E31A1C", # red
+  "green4", "magenta",
+  "#6A3D9A", # purple
+  "#FF7F00", # orange
+  "violet", "turquoise",
+  "skyblue2", "darkgreen", # lt pink
+  "palegreen2",
+  "#CAB2D6", # lt purple
+  "#FDBF6F", # lt orange
+  "gray70", "khaki2",
+  "maroon", "orchid3", "deeppink", "blue1", "steelblue4"
+)
+
+# === Helper function set_color ====
+set_color <- function(level1_group, grp_color) {
+ level2_3 <- rev_df %>% filter(level1 == level1_group)   %>% dplyr::select(level2, level3) %>% as.list() 
+ level2_3 <-  (unlist(level2_3, use.names = FALSE))
+ level2_3 <- level2_3[!is.na(level2_3)]  # select level 2 and 3 vars that belong to a given level 1 category
+ same_category <- c(level1_group, level2_3)
+ V(g)[V(g )$name %in% same_category]$color <- adjustcolor(grp_color, 0.5) # color level 1 and its sub- levels 2 and 3 the same color
+ return(g) }
+
+e <- get.edgelist(g,names=FALSE)
+l <- qgraph.layout.fruchtermanreingold(e,vcount=vcount(g))
+
+# run for loop to color each category
+level1_list<- unique(rev_df$level1) 
+for (x in 1:20) {
+ g <- set_color(levels(factor(level1_list))[x], c20[x]) 
+ } 
+
+jpeg("varicat_test.jpeg", units="in", width=35, height=35, res=250) 
+plot(g, layout= l ,  
+     # ==== vertex ====
+    vertex.frame.color = "white",
+    vertex.size=1.25, 
+    vertex.shape="circle",
+    # ==== label ====
+    vertex.label.cex=0.5, 
+    vertex.label.family="Helvetica",
+    vertex.label.font=2,
+    vertex.label.color="black",
+   #  set.vertex.attribute(az, "name", value=paste("y",1:27,sep=""))
+     #vertex.label.dist=0.25, 
+
+    # ==== edges ====
+    edge.color="grey",                           # Edge color
+     edge.width=0.5,
+     edge.arrow.size = 0.5 ,
+     edge.lty="dotdash",
+      #edge.labels=T
+    )   
+legend("topleft",bty = "n",
+       legend=levels(factor(level1_list)), fill= adjustcolor(c20, 0.5), border=NA)
+dev.off() 
+```
+ 
+ 
+### Dendogram
+Pros of Dendogram: 
+1. Show groupings of the variables at each level. 
+2. Linear layout - easier on the eyes  
+
+Cons
+1. Can't seem to move subgroups to the second layer. Instead they are pushed into the third layer.   
 ```{r}
 # ==== MAKE DENDOGRAM ==== 
 #create a data frame
@@ -352,7 +378,7 @@ edges = edges %>% drop_na()
 # create a vertices data.frame. One line per object of our hierarchy
 vertices = data.frame(
   name = unique(c(as.character(edges$from), as.character(edges$to))) ,
-  value = runif(240))
+  value = runif(251))
 # Now we can plot that
 mygraph <- graph_from_data_frame(edges  )
 
