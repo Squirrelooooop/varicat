@@ -335,34 +335,34 @@ rev_df
 
 ```{r}
 # ==== MAKE DENDOGRAM ==== 
-# create a data frame  
-# data <- rev_df
-# transform it to a edge list!
-# edges_level0_1 <- data %>% select(level0, level1) %>% unique %>% rename(from=level0, to=level1)
-# 
-# edges_level1_2 <- data %>% select(level1, level2) %>% unique %>% rename(from=level1, to=level2)
-# edges_level2_3 <- data %>% select(level2, level3) %>% unique %>% rename(from=level2, to=level3)
-# 
-# edges=rbind(
-#   edges_level0_1, 
-#   edges_level1_2, edges_level2_3)
-# 
-# edges = edges %>% drop_na() 
-# 
-# # create a vertices data.frame. One line per object of our hierarchy
-# vertices = data.frame(
-#   name = unique(c(as.character(edges$from), as.character(edges$to))) , 
-#   value = runif(240))  
-# # Now we can plot that
-# mygraph <- graph_from_data_frame(edges  )
-# 
-# tiff("varicat_ontology.tiff", units="in", width=30, height=60, res=200)
-# ggraph(mygraph, layout = 'dendrogram', circular = FALSE, repel=TRUE , ratio = 0.1, ) + 
-#   geom_edge_diagonal() +  
-#   geom_node_label(aes(label=name  )  )+
-#   theme_graph(base_family = "Arial" )  +
-#    theme_void() +  coord_flip() 
-# dev.off()
+#create a data frame
+data <- rev_df
+#transform it to a edge list!
+edges_level0_1 <- data %>% select(level0, level1) %>% unique %>% rename(from=level0, to=level1)
+
+edges_level1_2 <- data %>% select(level1, level2) %>% unique %>% rename(from=level1, to=level2)
+edges_level2_3 <- data %>% select(level2, level3) %>% unique %>% rename(from=level2, to=level3)
+
+edges=rbind(
+  edges_level0_1,
+  edges_level1_2, edges_level2_3)
+
+edges = edges %>% drop_na()
+
+# create a vertices data.frame. One line per object of our hierarchy
+vertices = data.frame(
+  name = unique(c(as.character(edges$from), as.character(edges$to))) ,
+  value = runif(240))
+# Now we can plot that
+mygraph <- graph_from_data_frame(edges  )
+
+jpeg("varicat_ontology.jpeg", units="in", width=30, height=60, res=200)
+ggraph(mygraph, layout = 'dendrogram', circular = FALSE, repel=TRUE , ratio = 0.1, ) +
+  geom_edge_diagonal() +
+  geom_node_label(aes(label=name  )  )+
+  theme_graph(base_family = "Arial" )  +
+   theme_void() +  coord_flip()
+dev.off()
 
 ```
  
