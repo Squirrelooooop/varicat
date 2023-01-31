@@ -1,3 +1,6 @@
 *.csv
 *.nb
 *.tiff
+.Rhistory
+.RData
+.Rproj.user
