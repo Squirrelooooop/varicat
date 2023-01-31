@@ -1,0 +1,148 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+libraries <- c("dplyr", "tidyverse", "DescTools", "ggplot2", "readxl", "lme4"
+               , "ModelMetrics", "merTools", "lmtest", "emmeans", "haven", "lmerTest"
+               , "metaforest", "rstatix")
+require(libraries)
+lapply(libraries, require, character.only = TRUE)
+ 
+# _fixed dataset has removed any misalignment of subjects across sites
+path = file.path( "Master_BD_080720_withPredictions_withNewHajek_fixed.sav")
+df = read_sav(path)
+
+df <- df %>% 
+  mutate_if(is.character, list(~na_if(.,""))) %>%
+  filter(!SubjID %in%  c('con_11',  'pat_13')) %>%
+    arrange(Site) 
+siteLoc <- read_excel("DescriptiveData_080720_2.xlsx", sheet=3)
+
+# create function to replace spaces with underscores
+replaceSpace <- function(dataframe) {
+   gsub(x = names(dataframe), pattern = " ", replacement = "_") 
+} 
+
+names(siteLoc) <- replaceSpace(siteLoc)
+names(df) <- replaceSpace(df) 
+
+# merge the main dataset with the Site Location
+df <- merge(df, siteLoc, by=c("PIName","Site"  )) 
+df <- df %>% 
+  filter(Age <= 75  & Age  >=18) 
+BD_only <- df %>% filter(Dx==1) 
+```
+
+### Plot BrainPAD Lithium vs. No lithium
+
+```{r}
+ summ <- df %>% 
+  filter(!is.na(Li)) %>%
+  group_by(Li) %>% 
+  dplyr::summarize( brainPAD_mean = round(mean(BrainPAD), 2))
+jpeg(filename='figures/lithium_usage_on_brainPAD.jpeg')
+BD_only %>%
+  filter(!is.na(Li)) %>%
+  ggplot(mapping = aes(x=factor(Li, labels = c('No','Yes')), y = BrainPAD , fill=factor(Li)))+ ylim(-45,45)+geom_violin(, alpha= 0.2)+ 
+  geom_label(data = summ, aes(x = factor(Li, labels = c('No','Yes')), y = brainPAD_mean, label = paste(  brainPAD_mean)), alpha= 0.2) +   xlab("Lithium Usage") +theme_classic()+ theme(legend.position = "none")+scale_fill_manual(values=c("darkgray","red" ))  
+dev.off()
+```
+
+### Recode Li and AntiEpileptics into four diff levels in a single variable
+```{r}
+BD_only <- BD_only %>%
+  mutate(moodStabilizer = 
+                  case_when(
+                    Li == 0 & AntiEpileptic == 0 ~ 'none',
+                    Li == 0 & AntiEpileptic == 1 ~ 'AntiE',
+                    Li == 1 & AntiEpileptic == 0 ~ 'Li',
+                    Li == 1 & AntiEpileptic == 1 ~ 'both',
+                  ))  
+ 
+# relevel factors - set ref group to none
+BD_only$moodStabilizer<- as.factor(BD_only$moodStabilizer)
+BD_only$moodStabilizer <- relevel(BD_only$moodStabilizer,"none")
+levels(BD_only$moodStabilizer)
+BD_only %>% group_by(moodStabilizer) %>% tally() %>% write_xlsx(., "supp_tables/mood_stabilizer_count.xlsx")
+```
+
+```{r}
+m1<-lmer(BrainPAD ~   Age + Sex + Age2 + Age3 +moodStabilizer + (1 | Site), data = BD_only)
+summary(m1) 
+```
+
+
+
+### Est. Marginal Means of Li*AntiEpileptics Groups
+```{r}
+# pairwise comparisons between the groups in this model
+emm.s<-emmeans(m1, specs = pairwise ~ moodStabilizer)  
+jpeg(file="figures/emmeans_mood_stablizer.jpeg")
+
+plot(emm.s, comparisons = TRUE) + theme_classic() + scale_y_discrete("Groups", labels = c("None","Anti-Epileptic",'Both','Li')) + scale_x_continuous("Est. Marginal Means") +coord_flip()
+dev.off()
+```
+
+```{r}
+as.data.frame(emm.s$contrasts) %>%
+  format_table() %>% write_xlsx(., 'supp_tables/emmeans_mood_stablizer.xlsx')
+
+as.data.frame(emm.s$contrasts)
+```
+ 
+```{r}
+m1<-lmer(BrainPAD ~   Age + Sex + Age2 + Age3 + moodStabilizer + (1 | Site), data = BD_only)
+summary(m1)
+#anova(m1) 
+```
+
+
+
+```{r}
+# Relationship of Li to BrainPAD adjusting for covariates, excluding users of AntiEpileptics
+# Li, b= -3.25, t= -3.85, p < 0.001
+excludeNonAntiEpileptic_df <- BD_only %>%
+  filter(AntiEpileptic == 1) #only AntiEpileptic  users
+m1<-lmer(BrainPAD ~   Age + Sex + Age2 + Age3 + Li + (1 | Site), data = excludeNonAntiEpileptic_df)
+summary(m1) 
+```
+
+```{r}
+# Relationship of Li to BrainPAD adjusting for covariates
+# b=-2.69, t=-5.35, p<0.001 
+m1 <-lmer(BrainPAD ~   Age + Sex + Age2 + Age3 + Li + (1 | Site), data = BD_only)
+summary(m1)
+```
+ 
+
+
+
+
+
+```{r}
+# Relationship of AntiEpileptic to BrainPAD adjusting for covariates
+# b=2.31, t=4.71, p<0.001
+ 
+m1 <-lmer(BrainPAD ~   Age + Sex + Age2 + Age3 + AntiEpileptic + (1 | Site), data = BD_only)
+summary(m1)
+```
+
+
+```{r}
+
+# Relationship of AntiEpileptic to BrainPAD adjusting for covariates, excluding non users of Li
+# AntiEpileptic, b=1.04, t=1.22, p = NS
+excludeNonLi_df <- df %>%
+  filter(Li == 1) #only Lithium  users 
+m1 <-lmer(BrainPAD ~   Age + Sex + Age2 + Age3 + AntiEpileptic + (1 | Site), data = excludeNonLi_df)
+summary(m1) 
+```
+
+
+```{r}
+# Interaction between Li and Anti-Epileptic to BrainPAD adjusting for covariates
+# interaction term, p= NS
+m1 <-lmer(BrainPAD ~   Age + Sex + Age2 + Age3  +(Li*AntiEpileptic) + (1 | Site), data = BD_only)
+summary(m1) 
+```

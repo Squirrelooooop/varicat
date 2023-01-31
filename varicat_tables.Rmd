@@ -1,0 +1,146 @@
+---
+title: "VariCat Cognitive Variables"
+author: "Hui Xin Ng"
+date: "2022-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# table that has the cognitive sub-domains with Number of studies and Median number of variables in that domain. 
+# table of instruments that are used in more than 2 studies and how many studies they are used in.
+library(readr)
+library(tidyverse) 
+library(ggplot2) 
+```
+ 
+# How many study sites are there for each cognitive subdomain?
+```{r pressure, echo=FALSE}
+data <- read_csv("gagebd_label_v2.csv")
+data <- data[,c(4,5, 7, 1)] %>% replace_na(list(battery = 'None'))
+names(data) <- c('cognitive_type',	'battery',	'instrumenttype','study')
+df1 <- data %>% group_by(cognitive_type) %>% count(study)  %>% tally()
+names(df1)[2] <- c("num_study")
+
+
+# num of studies in each battery
+data %>% replace_na(list(battery = 'None'))%>% group_by(battery) %>% count(study)   %>% tally() %>% filter(n>2)
+ 
+```
+
+
+```{r}
+data <- data %>% mutate(instrumenttype =gsub("\\s*\\([^\\)]+\\)", "", instrumenttype))   %>% mutate(instrumenttype =gsub(",$", "", instrumenttype)) %>%   mutate(instrumenttype =str_to_title( instrumenttype))
+
+
+# table
+df1<- df1 %>% arrange(desc(num_study))
+ data %>% mutate(instrumenttype =gsub("\\s*\\([^\\)]+\\)", "", instrumenttype))   %>% mutate(instrumenttype =gsub(",$", "", instrumenttype)) %>%   mutate(instrumenttype =str_to_title( instrumenttype))
+ 
+
+```
+
+```{r}  
+other_instrument <- read_csv("other_instrument_v2.csv", show_col_types = FALSE)
+
+other_instrument <- other_instrument  %>%
+  mutate_if(is.character, str_trim)
+
+colnames(other_instrument) <- c('record_id',	'cognitive_type', 	"instrumenttype", 	"instrumenttypeoth",	"study", 	'varname')
+
+other_instrument <- other_instrument %>% mutate(instrumenttypeoth = case_when(instrumenttypeoth %in% c('D-KEFS','DKFES', 'Delis') ~ 'DKEFS', TRUE ~ instrumenttypeoth ))%>% 
+  mutate(instrumenttypeoth = case_when(instrumenttypeoth %in% c('BAC-A: Brief Assessment of Cognition In Affective Disorders (BAC-A)','BAC-A:Brief Assessment of Cognition In Affective Disorders (BAC-A)' ) ~ 'BAC-A: brief assessment of cognition in affective disorders', TRUE ~ instrumenttypeoth )) %>%
+  
+  mutate(instrumenttypeoth = case_when(instrumenttypeoth %in% c('Memory for Intensions Screening Test (MIST)', 'Memory for Intentions Screening Test (MIST):'  ) ~ 'Memory for Intentions Screening Test (MIST)', TRUE ~ instrumenttypeoth )) %>% 
+  
+  mutate(instrumenttypeoth = case_when(instrumenttypeoth %in% c('FAB/ frontal assessment battery' ) ~ 'FAB-frontal assessment battery', TRUE ~ instrumenttypeoth ))
+other_instrument <- other_instrument %>% 
+  
+  mutate(instrumenttypeoth = str_trim(instrumenttypeoth)) %>% mutate(instrumenttypeoth =gsub("\\-%$:$", "", other_instrument$instrumenttypeoth)) %>% mutate(instrumenttypeoth =gsub("Boston Naming Test", "", other_instrument$instrumenttypeoth))
+
+other_instrument  %>%
+  group_by(instrumenttypeoth, study)%>%count(instrumenttypeoth, study)   %>% replace_na(list(instrumenttypeoth = 'None'))  
+```
+
+ 
+
+CBBSX-GGZ (13), DOBI1 and DOBI2 used a modified version of the Auditory Verbal Learning Test
+
+# What is the median, min and max number of variables for each cognitive domain?
+```{r pressure, echo=FALSE} 
+df2 <- data %>% group_by(cognitive_type) %>% count(study) %>% summarise( min = min(n, na.rm=TRUE), max = max(n, na.rm=TRUE), median_num_vars_per_cog_domain = median(n))
+data %>% group_by(cognitive_type) %>% count(study) # check how many vars of a particular domain there are from a study 
+```
+
+# merge df1 and df2
+```{r}
+n_study_in_cog_domain <-merge(df1,df2, by=c("cognitive_type")) %>% arrange(desc(num_study))
+ 
+write.csv(n_study_in_cog_domain, "table1.csv")
+# Barplot
+
+n_study_in_cog_domain #87 is from geri-sad, mostly DRS and MINI MMSE
+```
+
+```{r}
+number_ticks <- function(n) {function(limits) pretty(limits, n)}
+
+ggplot(n_study_in_cog_domain, aes(x=reorder(cognitive_type,num_study), y=num_study)) + 
+  geom_bar(stat = "identity") +coord_flip()+theme_classic() +
+  xlab("Cognitive Domain ") + ylab("Number of Studies") + scale_y_continuous(breaks=number_ticks(10))
+```
+# How many instruments are used in more than 2 studies, and which cognitive domains do they belong to?
+```{r}
+more_than_2_times_instrument <- data %>% group_by(cognitive_type, instrumenttype)%>% count(study) %>% tally()  %>% arrange(desc(n), .by_group = TRUE,  ) %>% filter(., n>2, instrumenttype != 'Other' )   %>% mutate(instrumenttype =gsub("\\s*\\([^\\)]+\\)", "", instrumenttype))   %>% mutate(instrumenttype =gsub(",$", "", instrumenttype)) %>%   mutate(instrumenttype =str_to_title( instrumenttype))
+write.csv(more_than_2_times_instrument, 'table2.csv')
+# Executive Functioning	Trail Making Test Part B	10
+more_than_2_times_instrument
+
+# Procssing speed	Trail Making Test Part A 8
+# Executive Functioning	Trail Making Test Part A	7		
+ scaleFUN <- function(x) sprintf("%.0f", x)
+
+freq_more_than_2_times_instrument <- more_than_2_times_instrument%>% ungroup()  %>% select(instrumenttype, n) %>% group_by(instrumenttype) %>% summarize(sum = sum(n))
+ggplot(freq_more_than_2_times_instrument, aes(x=reorder(instrumenttype,  sum), y=sum))+
+  geom_bar(stat='identity')+
+  ylab("Number of Studies") +  coord_flip()+theme_classic()  +  xlab("Cognitive Domain")  +   scale_y_continuous(breaks=number_ticks(10))
+# n refers to number of studies
+```
+### What domains have Other or NA as their instruments and have at least >2 studies using Other or NA?
+```{r}
+domains_withNAOther <- data %>% group_by(cognitive_type, instrumenttype)%>% count(study) %>% tally()  %>% arrange(desc(n), .by_group = TRUE,  ) %>% filter(., n>2, instrumenttype == 'Other'| is.na(instrumenttype)) %>% pull(cognitive_type)
+
+data %>% group_by(cognitive_type, instrumenttype)%>% count(study)  %>% tally() %>% arrange(desc(n), .by_group = TRUE,  ) %>% filter(., n>2, instrumenttype == 'Other'| is.na(instrumenttype)) 
+```
+
+
+
+### Which domain has any Nones for instrument type? 
+```{r}
+data %>% group_by(cognitive_type, instrumenttype)%>% mutate(count = n_distinct(study))%>% filter(instrumenttype == "None")  #%>% filter(count >2)   
+```
+Global cognitive functioning variable has instrument "NA" in the four following studies:	Barcelona_Radua_wave2. CBBSX-GGZ, and Inflammaging		 
+
+### MISC. 
+# How many cognitive domains are there for each study site? 
+```{r  }
+data %>% group_by(study) %>% count(cognitive_type) %>% tally()
+```
+
+# How many studies was each instrument used in?
+```{r}
+data %>% group_by(study) %>% count(instrumenttype) %>% tally()
+```
+
+# How many instrument types did each study have?
+```{r}
+data %>% group_by(instrumenttype  ) %>% count(study) %>% tally() %>% filter(., n>2)
+```
+
+# Which domains had NA or Other as their instrument type?
+```{r}
+# other_instrument <- data %>% group_by(cognitive_type, instrumenttype)%>% mutate(count = n_distinct(study))%>% filter(instrumenttype == 'Other' ) %>% filter(cognitive_type %in% domains_withNAOther) %>% distinct()
+# write.csv(other_instrument, 'other_instrument.csv')
+# 
+# other_instrument
+```
+

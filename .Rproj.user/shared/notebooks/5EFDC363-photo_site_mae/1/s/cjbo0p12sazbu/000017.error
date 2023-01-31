@@ -1,0 +1,1 @@
+{"frames":[{"func":"jpeg(filename = cat(\"figures/\", name, \"BrainPAD_across_age\"))","file":"","line_number":0,"end_line_number":0,"character_number":0,"end_character_number":0}],"message":"Error in jpeg(filename = cat(\"figures/\", name, \"BrainPAD_across_age\")) : \n  unable to start jpeg() device\n"}

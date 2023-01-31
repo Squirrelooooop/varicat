@@ -1,0 +1,239 @@
+---
+title: "BD_Generalization"
+author: "HXNG"
+date: "4/13/2022"
+output:
+  word_document: default
+  pdf_document: default
+---
+```{r} 
+libraries <- c("dplyr", "tidyverse", "DescTools", "ggplot2", "readxl", "lme4"
+               , "ModelMetrics", "merTools", "lmtest", "emmeans", "haven", "lmerTest"
+               , "metaforest", "rstatix")
+require(libraries)
+lapply(libraries, require, character.only = TRUE)
+path = file.path( "Master_BD_080720_withPredictions_withNewHajek_fixed.sav")
+df = read_sav(path)
+
+# Helper function to rename df columns
+replaceSpace <- function(dataframe) {
+  gsub(x = names(dataframe), pattern = " ", replacement = "_") 
+}
+
+df <- df %>% 
+  mutate_if(is.character, list(~na_if(.,""))) %>%
+  filter(!SubjID %in%  c('con_11',  'pat_13')) %>% # drop 2 subjects from Haarman
+  arrange(Site) # arrange by Site number
+
+siteLoc <- read_excel("DescriptiveData_080720_2.xlsx", sheet=3)
+
+names(siteLoc) <- replaceSpace(siteLoc)
+names(df) <- replaceSpace(df) 
+
+df <- merge(df, siteLoc, by=c("PIName","Site"  )) # merge 
+df <- df %>% 
+  filter(Age <= 75  & Age  >=18)  
+BD_only <- df %>% filter(Dx==1) 
+```
+
+
+### Count num people not on any medications
+```{r}
+site_no_med <-BD_only %>% 
+  filter(AntiEpileptic==0, 
+         Li==0,AntiDep==0, 
+         Gen1AntiPsych==0, 
+         Gen2AntiPsych==0) %>%  
+  group_by(Site_Locations) %>% tally() 
+
+site_all_bd <- BD_only %>% dplyr::count(Site_Locations, PIName)
+site_all_bd <- merge(site_all_bd, site_no_med, by=c("Site_Locations"))
+names(site_all_bd) <- c('Site','PIName','total_BD', 'no_med_BD')
+write.csv(site_all_bd,'enigmaBrainAGE_no_med_BD_2022may6.csv',row.names = FALSE)
+```
+
+## MAE of Each Site, Separate plot for each Dx*Sex groups
+```{r, fig.width=11 }
+# Sort by Site Number
+# Show separate table with Site Names
+AEeachSite <- df %>%
+  arrange(Site)%>% 
+  group_by(Site, Site_Locations, Sex, Dx,Age)%>% 
+  dplyr::summarize(AE = abs(age_prediction - Age)) %>% arrange(Site) 
+
+for (dx in c(0, 1)) {
+  for (sex in c(1,2)){
+    if (dx == 0) { 
+      dxTitle = "HC"} else{
+        dxTitle = "BD"
+      }
+    if (sex == 1) { 
+      sexTitle = "Men"} else{
+        sexTitle = "Women"
+      }
+    
+    
+    # MAE of Model of HC Men
+p<-AEeachSite %>%
+  filter(Sex==sex, Dx==dx)%>%
+  ggplot(aes(x = factor(Site) , y=AE))+
+  geom_violin() + theme_classic() + stat_summary(fun=mean, geom="point",  color="red", size=2) +xlab('Site')+ggtitle('Absolute Errors of Each Site (HC - Male)') +theme(plot.title = element_text(hjust = 0.51))
+print(p)    
+  }
+  }
+ 
+```
+
+
+ 
+
+### Distribution of BrainPADs in HC vs. BD
+```{r}
+df %>%
+  dplyr::select(BrainPAD, Dx) %>%
+  ggplot(aes(BrainPAD)) +
+  geom_density(aes(fill=factor(Dx)), alpha=.25) + 
+  scale_fill_manual(name='Group', labels = c("Control", "BD"), 
+                    values = c("darkgray","red" )) +    guides(fill=guide_legend(title="Group")) + theme_classic()  +theme(legend.position="bottom") 
+
+# Average Brain-PADs were −0.80 (SD 9.38) in the control and +0.52 years (SD 9.87) in the BD group.
+df %>%
+  dplyr::select(BrainPAD, Dx) %>% group_by(Dx) %>%  summarise_at(vars(BrainPAD), list(meanBrainPAD = mean, sd = sd)) %>% round(2)
+```
+ 
+### Plot EMMs for HC vs. Dx groups
+```{r}
+
+mod <- lmer(BrainPAD ~ Dx + Sex +   Age + Age2 + Age3 + (1 | Site)
+           , data = df)    
+emm.s <- emmeans(mod, specs = pairwise ~ Dx) 
+Means = as.data.frame(emm.s$emmeans)
+# The EMM of BrainPADs is -0.95 (SE 0.68, CI: -2.34 - 0.44), for healthy controls and +1.42  years (SE 0.66,  CI: 0.05 - 2.78) for BD individuals.  
+
+mod_fixed <- lm(BrainPAD ~ Dx + Sex +  Age + Age2 + Age3 + Site
+           , data = df)   
+# Use anova to get f values 
+round(as.data.frame(anova(mod_fixed)),3) 
+round(EtaSq(mod_fixed), 3) # eta squared  
+```
+
+```{r}
+df %>% 
+  ggplot(mapping = aes(x=factor(Dx, labels = c('HC','BD')), y = BrainPAD, fill=factor(Dx, labels = c('Control','BD')))) + geom_violin(alpha=0.25)  + guides(fill=guide_legend(title="Sex")) + xlab('Sex') + ylim(-60,40)  +scale_fill_manual(values=c("darkgray","red" )) + theme_classic()   +
+  geom_pointrange(
+    data = Means,
+    aes(y = emmean, ymin = lower.CL , ymax = upper.CL),
+    size = 0.2,
+    color = "brown") #+ geom_line(data = Means, aes(y = emmean, group = 0), size = 0.2, color = 'brown')
+```
+
+ 
+
+```{r}
+emm.s <- emmeans(mod, specs = pairwise ~ Dx:Sex) 
+emm.s
+Means <- as.data.frame(emm.s$emmeans)
+print(round(Means, 2))
+```
+
+ 
+
+### Scatterplot Age. vs. Predicted Age for Each Sex*Dx Group
+```{r,fig.width=11,height=10}
+ 
+for (dx in c(0, 1)) {
+  for (sex in c(1,2)){
+    if (dx == 0) { 
+      dxTitle = "HC"} else{
+        dxTitle = "BD"
+      }
+    if (sex == 1) { 
+      sexTitle = "Men"} else{
+        sexTitle = "Women"
+      }  
+    m <- df%>%
+      filter(Sex==sex, Dx==dx) %>%
+      lm(age_prediction ~ Age, data = .)
+    #print("BD Males")
+    #print(round(summary(m)$r.squared,2))
+    print(round(sqrt(summary(m)$r.squared), 2))
+    
+    p <- df%>%
+      filter(Sex==sex, Dx==dx)%>%
+      ggplot(aes(x = Age, y = age_prediction, colour = factor(Site) )) + ggtitle(paste('Age vs. Predicted Age among', dxTitle, sexTitle))+
+      geom_point(size = 3, alpha = 0.75)  +
+      scale_fill_manual(values = rainbow(28))+theme_classic()+labs(y = "Predicted Age") + 
+      geom_smooth(fullrange = T, method = "lm", se=FALSE, color="black", formula = y~x)+ theme(legend.position = "none")+theme(axis.text=element_text(size=12),
+      axis.title=element_text(size=12,face="bold"),plot.title = element_text(size = 12, face = "bold"))+ geom_abline(slope=1)+xlim(-5,90)+ylim(-5,90)                                  # Add text element to plot
+      #annotate("text", x = 80, y = 40.0, label = paste0('r = ' , round(sqrt(summary(m)$r.squared), 2))) + 
+     # annotate("text", x = 80, y = 45.0, label = paste(bquote('Y-axis '("a"^2))))
+      jpeg(filename = paste0('figures/',dxTitle,'_',sexTitle,'BrainPAD_corr_age.jpeg'))
+      print(p) 
+      dev.off() 
+  }
+} 
+```
+### Correlation between Age and Brain-PAD (r and scatterplot)
+```{r}
+for( x in c(0,1)){
+  m <- df%>%
+  filter(Dx==x) %>%
+  lm(BrainPAD ~ Age, data = .)
+print(x)
+print(round(summary(m)$r.squared,2))
+print(round(sqrt(summary(m)$r.squared), 2))
+if (x == 0) { 
+  name = "HC"} else{
+    name = "BD"
+  }
+p<-df%>%
+  filter(Dx==x)%>%
+  ggplot(aes(x = Age , y = BrainPAD, colour = factor(Site_Locations) )) + 
+  geom_point(size = 2, alpha = 0.75) + 
+  scale_fill_manual(values = rainbow(28))+labs(y = "Brain-PAD") +theme_classic()+ggtitle(paste0('Age vs. Brain-PAD in ' , name))  +
+  geom_smooth(fullrange = T, method = "lm", se=FALSE, color="black", formula = y~x)+ 
+  theme(legend.position = "none")+theme(axis.text=element_text(size=12),
+axis.title=element_text(size=12,face="bold"),
+plot.title = element_text(size = 12, face = "bold"))+xlim(0,90)+ylim(-40,40) +                               # Add text element to plot
+  annotate("text", x = 80, y = 40.0, label = paste0('r = -' , round(sqrt(summary(m)$r.squared), 2)))
+jpeg(filename = paste0('figures/',name,'BrainPAD_corr_age.jpeg'))
+print(p) 
+dev.off()
+
+# jpeg(filename = paste0('figures/legend_BrainPAD_corr_age.jpeg'))
+# print(as_ggplot(get_legend(p)))
+# dev.off()
+}
+```
+
+
+### BrainPAD by Age Group
+```{r}
+
+for( x in c(1,2)){
+  if (x == 1) { 
+  name = "Men"} else{
+    name = "Women"
+  }
+p<- df %>%
+  mutate(AgeGroup = case_when(
+    (Age >= 18 & Age <= 29)~"18-29",
+   # (Age >= 20 & Age <= 29)~ "25-29",
+    (Age >= 30 & Age <= 39)~ "30-39",
+    (Age >= 40 & Age <= 49)~ "40-49",
+    (Age >= 50 & Age <= 59)~ "50-59",
+    (Age >= 60 & Age <= 75)~"60-75" 
+  ))   %>% filter(Sex==x, is.na(AgeGroup) == FALSE, Dx==1) %>%
+  ggplot(mapping = aes(x=AgeGroup, y = BrainPAD, fill=factor(AgeGroup))) + geom_violin(alpha=0.25)+
+  scale_fill_manual(values = rainbow(5)) + theme_classic() + guides(fill=guide_legend(title="Age Group")) + ggtitle(paste("BrainPAD across Age Groups in",name))
+jpeg(filename = paste0('figures/',name,'BrainPAD_across_age.jpeg'))
+print(p) 
+dev.off()
+}
+ 
+```
+
+```{r}
+# Engelmann–Hecker plot
+#ehplot(df$BrainPAD, df$Dx, intervals = 80, cex=0.5, col=c("darkgray", "red")[as.numeric(factor(df$Dx))], xlab="Group", ylab="BrainPAD")
+```
