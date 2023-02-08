@@ -1,0 +1,173 @@
+---
+title: "Non-interactive Varicat Ontology"
+author: "Hui Xin Ng"
+date: "2023-02-08"
+output: html_document
+---
+```{r, message=FALSE}
+library(ggraph) 
+library(igraph)
+library(cli)
+library(dplyr)
+library(tidyverse) 
+library(data.tree) # for making the 'ontology' data structure
+library(rlang)
+library(networkD3) # for making interactive viz
+library(htmltools)
+library(stringr)
+library(qgraph)
+```
+ 
+ 
+ 
+```{r}
+varicat_ontology <- read.csv("varicat_ontology.csv", sep=",", header=TRUE)
+# reverse order (only relevant for dendogram)
+rev_df <- apply(varicat_ontology, 2, rev) # r
+ 
+# converting the result to dataframe
+rev_df <- as.data.frame(rev_df) %>% mutate_all(., list(~na_if(.,"")))
+rev_df <- as.data.frame(apply(rev_df,2, str_trim)) %>% arrange(level1) # remove trailing spaces
+# subset(rev_df,duplicated(level3)) #check if there are duplicats in lvl 3 except for NAs
+```
+
+### Dendogram
+Pros of Dendogram: 
+1. Show groupings of the variables at each level. 
+2. Linear layout - easier on the eyes  
+
+Cons
+1. Can't seem to move subgroups to the second layer. Instead they are pushed into the third layer.   
+```{r}
+# ==== MAKE DENDOGRAM ==== 
+#create a data frame
+data <- rev_df
+#transform it to a edge list!
+edges_level0_1 <- data %>% select(level0, level1) %>% unique %>% rename(from=level0, to=level1)
+
+edges_level1_2 <- data %>% select(level1, level2) %>% unique %>% rename(from=level1, to=level2)
+edges_level2_3 <- data %>% select(level2, level3) %>% unique %>% rename(from=level2, to=level3)
+
+edges=rbind(
+  edges_level0_1,
+  edges_level1_2, edges_level2_3)
+
+edges = edges %>% drop_na()
+
+# create a vertices data.frame. One line per object of our hierarchy
+vertices = data.frame(
+  name = unique(c(as.character(edges$from), as.character(edges$to))) ,
+  value = runif(251))
+# Now we can plot that
+mygraph <- graph_from_data_frame(edges  )
+
+jpeg("varicat_ontology.jpeg", units="in", width=30, height=60, res=200)
+ggraph(mygraph, layout = 'dendrogram', circular = FALSE, repel=TRUE , ratio = 0.1, ) +
+  geom_edge_diagonal() +
+  geom_node_label(aes(label=name  )  )+
+  theme_graph(base_family = "Arial" )  +
+   theme_void() +  coord_flip()
+dev.off()
+
+```
+
+
+
+# Non-interactive Igraph 
+```{r}
+
+c20 <- c(
+  "dodgerblue2", "#E31A1C", # red
+  "green4", "magenta",
+  "#6A3D9A", # purple
+  "#FF7F00", # orange
+  "violet", "turquoise",
+  "skyblue2", "darkgreen", # lt pink
+  "palegreen2",
+  "#CAB2D6", # lt purple
+  "#FDBF6F", # lt orange
+  "gray70", "khaki2",
+  "maroon", "orchid3", "deeppink", "blue1", "steelblue4"
+)
+
+# === Helper function set_color ====
+set_color <- function(level1_group, grp_color) {
+ level2_3 <- rev_df %>% filter(level1 == level1_group)   %>% dplyr::select(level2, level3) %>% as.list() 
+ level2_3 <-  (unlist(level2_3, use.names = FALSE))
+ level2_3 <- level2_3[!is.na(level2_3)]  # select level 2 and 3 vars that belong to a given level 1 category
+ same_category <- c(level1_group, level2_3)
+ V(g)[V(g )$name %in% same_category]$color <- adjustcolor(grp_color, 0.5) # color level 1 and its sub- levels 2 and 3 the same color
+ return(g) }
+
+e <- get.edgelist(g,names=FALSE)
+l <- qgraph.layout.fruchtermanreingold(e,vcount=vcount(g))
+
+# run for loop to color each category
+level1_list<- unique(rev_df$level1) 
+for (x in 1:20) {
+ g <- set_color(levels(factor(level1_list))[x], c20[x]) 
+ } 
+
+jpeg("varicat_test.jpeg", units="in", width=35, height=35, res=250) 
+plot(g, layout= l ,  
+     # ==== vertex ====
+    vertex.frame.color = "white",
+    vertex.size=1.25, 
+    vertex.shape="circle",
+    # ==== label ====
+    vertex.label.cex=0.5, 
+    vertex.label.family="Helvetica",
+    vertex.label.font=2,
+    vertex.label.color="black",
+   #  set.vertex.attribute(az, "name", value=paste("y",1:27,sep=""))
+     #vertex.label.dist=0.25, 
+
+    # ==== edges ====
+    edge.color="grey",                           # Edge color
+     edge.width=0.5,
+     edge.arrow.size = 0.5 ,
+     edge.lty="dotdash",
+      #edge.labels=T
+    )   
+legend("topleft",bty = "n",
+       legend=levels(factor(level1_list)), fill= adjustcolor(c20, 0.5), border=NA)
+dev.off() 
+```
+ 
+```{r}
+### Ontology in short-form/numeric code == Issues due to non-unique node names == 
+# code_df <- rev_df %>% dplyr::select(level0, level1, level2, level3)
+# 
+# code_df <- code_df %>% 
+#   rowwise() %>% 
+#   arrange(level1, level2) %>% 
+#   mutate(l1_id = str_replace(level1, "-", " ")) %>%  
+#   mutate(l1_id = paste(
+#     unlist(
+#       lapply((str_split(l1_id, ' ')), function(x){
+#         str_to_title(str_sub(x, 1, 4))
+#       })
+#     ), collapse = ""))   
+#  
+# code_df <- code_df %>% 
+#    arrange(level1, level2) %>% 
+#    group_by(level1) %>%
+#    mutate(l2_id = as.numeric(factor(level2)))  
+# 
+# code_df <- code_df %>% 
+#    group_by(level1, level2) %>%
+#    mutate(l3_id = as.numeric(factor(level3)))  %>%
+#      arrange(level1, level2, level3)  
+# 
+# code_df <- code_df %>% ungroup() %>% dplyr::select(level0, l1_id, l2_id, l3_id)
+#  
+# code_df$level0 <- (code_df$level0)
+#  code_df$pathString <- paste5(code_df$level0, 
+#                             code_df$l1_id, 
+#                             code_df$l2_id, 
+#                             code_df$l3_id,
+#                             sep = "/", na.rm=TRUE
+#                             )  
+ 
+```
+ 
