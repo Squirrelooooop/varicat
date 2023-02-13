@@ -2,9 +2,11 @@
 title: "Varicat Ontology Viz"
 output: html_notebook
 ---
-```{r}
+```{r, message = FALSE}
 install.packages("igraph") 
 install.packages("ggraph") 
+
+# http://curleylab.psych.columbia.edu/netviz/netviz2.html#/20  
 ```
 
 ```{r, message=FALSE}
@@ -55,6 +57,11 @@ rev_df <- apply(varicat_ontology, 2, rev) # r
 rev_df <- as.data.frame(rev_df) %>% mutate_all(., list(~na_if(.,"")))
 rev_df <- as.data.frame(apply(rev_df,2, str_trim)) %>% arrange(level1) # remove trailing spaces
 # subset(rev_df,duplicated(level3)) #check if there are duplicats in lvl 3 except for NAs
+
+
+(unique(varicat_ontology$level1) )# 20
+sort(unique(varicat_ontology$level2) )# 103
+unique(varicat_ontology$level3)
 ```
 
 ### Make ontology with data.tree
@@ -96,32 +103,21 @@ fn <- forceNetwork(Links = d3$links, Nodes = d3$nodes ,
              
 
 # JS code for fixing the legend on the top left and avoid zooming effect
-fn1 <- htmlwidgets::onRender(fn, jsCode = ' 
+fn  <- htmlwidgets::onRender(fn, jsCode = ' 
   function (el, x) {
     d3.select("svg").append("g").attr("id", "legend-layer");
     var legend_layer = d3.select("#legend-layer");
     d3.selectAll(".legend")
       .each(function() { legend_layer.append(() => this); }); 
       
-  } 
-') 
+  }')  
 fn %>% saveNetwork(file = 'varicat_ontology.html')
-
-webshot("varicat_ontology.html", "varicat_ontology.jpeg", vwidth = 1700, vheight = 1700, zoom = 1.2)
-
-if (interactive()) {
-# Can be chained with webshot() or appshot()
-webshot("varicat_ontology.html", "r-small-1.png") %>%
-resize("75%")
-}
-
-# http://curleylab.psych.columbia.edu/netviz/netviz2.html#/20  
+webshot("varicat_ontology.html", "varicat_ontology.jpeg", vwidth = 1700, vheight = 1700, zoom = 1.2) 
 ```
 
 ### Inflammaging dataset
 ```{r}
-#### Reshape Inflammaging df to conform to ontology
-
+#### Reshape Inflammaging df to conform to ontology 
 inflam <- read.csv("inflammaging_varicat.csv", sep=",", header=TRUE)
 
 colnames_inflam <- colnames(inflam) # get col names 
@@ -142,17 +138,13 @@ colnames(inflam)
 
 inflam %>% group_by(Type.of.clinical.characteristics.) %>% filter(!is.na(Type.of.clinical.characteristics.)) %>%  select_if(~any(!is.na(.)))
 inflam %>% group_by(Course.of.bipolar.illness.symptoms.type.) %>% filter(!is.na(Course.of.bipolar.illness.symptoms.type.)) %>%  select_if(~any(!is.na(.))) %>% arrange(Course.of.bipolar.illness.symptoms.type.)
-
+redcap_output <-  read.csv("redcap_output_colnames.csv")
 l1_exist_in_inflam <- unique(redcap_output$level1)[unique(redcap_output$level1) %in% colnames(inflam)]
 l2_exist_in_inflam <- unique(redcap_output$level2)[unique(redcap_output$level2) %in% colnames(inflam)]
 l3_exist_in_inflam <- unique(redcap_output$level3)[unique(redcap_output$level3) %in% colnames(inflam)]
 
-for (i in l2_exist_in_inflam) { 
- a <- inflam %>% group_by(.data[[i]],  ) %>% filter(!is.na(.data[[i]])) %>% purrr::discard(~all(is.na(.)))
-#a <- cbind(a[1], mycol = do.call(pmax, c(a[-1], na.rm = TRUE)))
- print(a)
-}
-#redcap_output <-  read.csv("redcap_output_colnames.csv")
+ 
+# 
 # unique(redcap_output$level1)
 ```
 

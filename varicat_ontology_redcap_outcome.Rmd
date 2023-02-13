@@ -1,0 +1,52 @@
+---
+title: "Varicat Ontology Redcap output"
+output: html_notebook
+---
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(stringr)  
+library(ggraph) 
+library(igraph)
+library(cli)
+library(dplyr)
+library(tidyverse) 
+library(data.tree) # for making the 'ontology' data structure
+library(rlang)
+library(networkD3) # for making interactive viz
+library(htmltools)
+library(stringr) 
+
+# ==== data cleaning === 
+gage_bd_redcap_output <- read.csv("gage_bd_redcap_output.csv", sep=",", header=TRUE)
+colnames <- colnames(gage_bd_redcap_output)
+
+# NOTE: look up: regex and lapply
+colnames<- colnames[lapply(colnames, function(x) length(grep("Please|Is.this|What|Was.|Do.we|How.many.|Variables.this|General.notes|Complete" ,x,value=FALSE))) == 0] # remove sublevels that are too
+length(unique(colnames))
+
+# === classify each column name into levels 1, 2 vs. 3 === 
+redcap_output <- gage_bd_redcap_output[colnames]  %>%  select(-head(names(.), 2)) %>% mutate_all(., list(~na_if(.,""))) %>% distinct() 
+
+length(sort(unique(redcap_output$Domain.Main.category.of.the.variable.))) # there are a total of 20 level1 categories
+
+# get the col names of the level 1 categories 
+l1Cols <- c("Type.of.clinical.characteristics.", "Clinical.Trial..Specific..type.", "Cognitive.type.", "Course.of.bipolar.illness.episodes.type.", 
+           "Course.of.bipolar.illness.symptoms.type." ,   "Course.of.non.bipolar.psychiatric.illness.type.",  "Course.of.treatment.type." , "Current.illness.severity.type.", 
+           "Current.pharmacological.treatment.type.",  "Type.of.demographics." ,   "Ecological.Momentary.Assessment.type.",  "Family.history.type.",
+           "Lifetime.pharmacological.treatment.type.", "Type.of.Metadata.", "Miscellaneous.type." , "Other.non.pharmacological.treatment.type.", 
+           "Physical.health.type.",  "Physiological.type.", "Positive.Psychological.Factors.type.", "Trauma.Stress..type." ) 
+
+# l1_df <- cbind(redcap_output[1], redcap_output[l1Cols]) 
+# cbind(l1_df[1], mycol = do.call(pmax, c(l1_df[-1], na.rm = TRUE))) %>% distinct() # collapse all level2 vars into one column and remove duplicate rows
+```
+
+```{r}
+# get col names of the level 2 categories
+redcap_output %>% dplyr::select(!all_of(l1Cols))  %>% colnames() %>% sort()  # output level2 and level3 categories names
+
+# fill in the two lists below using the variable names in the output above, based on the levels from varicat_ontology.csv
+#l2Cols <- ()
+#l3Cols <- ()
+```
