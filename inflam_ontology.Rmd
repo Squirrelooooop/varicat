@@ -1,14 +1,3 @@
----
-title: "Varicat Ontology Viz"
-output: html_notebook
----
-```{r, message = FALSE}
-install.packages("igraph") 
-install.packages("ggraph") 
-
-# http://curleylab.psych.columbia.edu/netviz/netviz2.html#/20  
-```
-
 ```{r, message=FALSE}
 library(ggraph) 
 library(igraph)
@@ -45,75 +34,6 @@ paste5 <- function(..., sep = " ", collapse = NULL, na.rm = F) {
       }
     }
 } 
-```
- 
-## Read Ontology file with all varicat vars
-```{r}
-varicat_ontology <- read.csv("varicat_ontology.csv", sep=",", header=TRUE)
-# reverse order (only relevant for dendogram)
-rev_df <- apply(varicat_ontology, 2, rev) # r
- 
-# converting the result to dataframe
-rev_df <- as.data.frame(rev_df) %>% mutate_all(., list(~na_if(.,"")))
-rev_df <- as.data.frame(apply(rev_df,2, str_trim)) %>% arrange(level1) # remove trailing spaces
-# subset(rev_df,duplicated(level3)) #check if there are duplicats in lvl 3 except for NAs
-
-
-(unique(varicat_ontology$level1) )# 20
-sort(unique(varicat_ontology$level2) )# 103
-unique(varicat_ontology$level3)
-```
-
-### Make ontology with data.tree
-```{r}
-# create pathString to make the data tree@
-rev_df$pathString <- paste5(rev_df$level0, 
-                            rev_df$level1, 
-                            rev_df$level2, 
-                            rev_df$level3,
-                            sep = "/", na.rm=TRUE
-                            )  
- 
-ontology <- as.Node(rev_df, na.rm=TRUE) # create data.tree obj
-g <- as.igraph(ontology, direction = "climb")  %>% delete_vertices("Variable")  #%>%  delete_edges( c(1:10))  - can be used to delete vertices with string NA
-    
-``` 
-
-### Visualize ontology with ForceNetwork
-```{r}
-code_temp <- rev_df %>% 
-   arrange(level1, level2) %>% 
-   mutate(l1_id = (factor(level1))) # factor the domain name to show it as legend names and color vars by the domain it belongs to
-
-code_temp <- bind_rows(code_temp[c(2, 6)], code_temp[c( 3 ,6)], code_temp[c(4,6)]) # create new df grouped by the domain
-membership_custom <- cbind(code_temp[2], name = do.call(pmax, c(code_temp[-2], na.rm = TRUE))) %>% distinct() %>% drop_na()  %>% arrange(name) 
-
-d3 <- igraph_to_networkD3(g)  # convert igraph obj to networkd3 obj for viz
-membership_custom <-  merge(d3$nodes, membership_custom, on= "name") # merge node df and the new df grouped by domain to get desired color groupings
-d3$nodes <-  membership_custom[match(d3$nodes$name, membership_custom$name),] # order vars according to the data.tree obj's original order
-
-# create visualization
-fn <- forceNetwork(Links = d3$links, Nodes = d3$nodes ,
-             Source = 'source', Target = 'target', NodeID = 'name',  Group = 'l1_id', # get node id and group from d3$node
-            opacity = 1,  zoom = TRUE, legend = TRUE, linkDistance = 0.0001 , radiusCalculation = 0.01, 
-             charge = -70,   # node repulsion 
-             fontSize = 20, fontFamily = "Calibri",  
-         #    colourScale = JS("d3.scaleOrdinal(d3.schemeCategory20);"
-                              )
-             
-
-# JS code for fixing the legend on the top left and avoid zooming effect
-fn  <- htmlwidgets::onRender(fn, jsCode = ' 
-  function (el, x) {
-    d3.select("svg").append("g").attr("id", "legend-layer");
-    var legend_layer = d3.select("#legend-layer");
-    d3.selectAll(".legend")
-      .each(function() { legend_layer.append(() => this); }); 
-      
-  }')  
-fn %>% saveNetwork(file = 'varicat_ontology.html')
-
-webshot("varicat_ontology.html", "varicat_ontology.jpeg", vwidth = 1700, vheight = 1700, zoom = 1.2) 
 ```
 
 ### Inflammaging dataset
@@ -210,8 +130,7 @@ inflam_level_2_3_split <- inflam_level_2_3_split %>% mutate(level2 = case_when(
   level3 %in% comorbidities ~ "Comorbidities",
   TRUE ~ level2))
 ```
-
-### Visualize inflammaging ontology with ForceNetwork
+### Hard-coding to prevent non-unique node names
 ```{r}
 inflam_combined_n <- cbind(inflam_level_2_3_split[c(1,2,4)], mycol = do.call(pmax, c(inflam_level_2_3_split['level2_n'] , inflam_level_2_3_split['level3_n'], na.rm = TRUE))) %>% arrange(Domain)
 inflam_combined_n <- inflam_combined_n %>% mutate(level2 = case_when(Domain == 'Current pharmacological treatment' & level3 == 'Total psychiatric medications (count)' ~ "Current Drug Class",
@@ -220,15 +139,19 @@ inflam_combined_n <- inflam_combined_n %>% mutate(level2 = case_when(Domain == '
                                                 TRUE ~level2)) %>% mutate(level3 = case_when(
                                                   Domain == "Course of non-bipolar psychiatric illness" & level3 == 'Other' ~ "CoNBDpi Other",
                                                   Domain == "Metadata" & level3 == 'Other' ~ "Metadata Other",
-                                                  Domain == "Current pharmacological treatment" & level3 == 'Other' ~ "C PT Other",
+                                                   Domain == "Current pharmacological treatment" & level3 == 'Other' ~ "C PT Other",
                                                    TRUE ~level3)) %>% mutate(level2 = case_when(
-                                                  Domain == "Course of non-bipolar psychiatric illness" & level3 == 'CoNBDpi Other' ~ "CoNBDpi O.",
-                                                  Domain == "Metadata" & level3 == 'Metadata Other' ~ "Metadata O.",
-                                                  Domain == "Current pharmacological treatment" & level3 == 'C PT Other' ~ "C PT O.",
+                                                 #  Domain == "Course of non-bipolar psychiatric illness" & level3 == 'CoNBDpi Other' ~ "CoNBDpi O.",
+                                                 # Domain == "Metadata" & level3 == 'Metadata Other' ~ "Metadata O.",
+                                                #   Domain == "Current pharmacological treatment" & level3 == 'C PT Other' ~ "C PT O.",
                                                    Domain == "Physiological" & level2 == 'Physical Measurements' ~ "C PT O.",
                                                    TRUE ~level2))%>% mutate(level3 = str_replace_all(level3, "/", " "), 
                                                                            level2 = str_replace_all(level2, "/", " "), 
-                                                                           Domain = str_replace_all(Domain, "/", " ")) %>% distinct()
+                                                                           Domain = str_replace_all(Domain, "/", " ")) %>%
+  
+                                                                    mutate(level3 = str_replace_all(level3, " ", "_"), 
+                                                                           level2 = str_replace_all(level2, " ", "_"), 
+                                                                           Domain = str_replace_all(Domain, " ", "_")) %>% distinct()
 inflam_combined_n$level0 <- rep("Var", dim(inflam_combined_n)[1])
 
 inflam_combined_n$pathString <- paste5(inflam_combined_n$level0, 
@@ -238,36 +161,72 @@ inflam_combined_n$pathString <- paste5(inflam_combined_n$level0,
                             sep = "/", na.rm=TRUE
                             )  
 inflam_combined_n <-  inflam_combined_n %>% arrange(Domain, level2, level3)
-inflam_combined_n   %>% arrange(level2, level3)
-#inflam_ontology <- FromDataFrameTable(inflam_combined_n, colLevels = list( c("mycol")), na.rm = TRUE)
-inflam_ontology <- as.Node( inflam_combined_n)
+ 
+inflam_ontology <- as.Node( inflam_combined_n) # create data.tree, 102 rows
 
 # https://rdrr.io/cran/data.tree/man/as.igraph.Node.html data.tree --> igraph keep vertex size info
 print(inflam_ontology, "mycol")
 
+# convert data.tree to igraph obj
 inflam_g <- as.igraph(inflam_ontology, direction = "climb")  %>% delete_vertices("Var")  #%>%  delete_edges( c(1:10))  - can be used to delete vertices with string NA
-
+ 
+  
 inflam_code_temp <- inflam_combined_n %>% 
    arrange(Domain, level2) %>% 
    mutate(l1_id = (factor(Domain))) # factor the domain name to show it as legend names and color vars by the domain it belongs to
-
-
+ 
 inflam_code_temp <- bind_rows(inflam_code_temp[c("Domain", "l1_id")], inflam_code_temp[c( "level2" ,"l1_id")], inflam_code_temp[c("level3","l1_id")]) # create new df grouped by the domain
-membership_custom <- cbind(inflam_code_temp[2], name = do.call(pmax, c(inflam_code_temp[-2], na.rm = TRUE))) %>% distinct() %>% drop_na()  %>% arrange(name) 
+membership_custom <- cbind(inflam_code_temp[2], name = do.call(pmax, c(inflam_code_temp[-2], na.rm = TRUE))) %>% distinct() %>% drop_na()  %>% arrange(name) # group l2 and l3 variables under l1
 
-inflam_d3 <- igraph_to_networkD3(inflam_g)
+
+### Combine level 2 and level 3 variables into one single column 
+a <- cbind(inflam_combined_n[2:3], name = do.call(pmax, c(inflam_combined_n[4], na.rm = TRUE))) %>% na.omit()  %>% ungroup() %>% dplyr::select(level3, name)   
+colnames(a) <- c("name", "n")
+b <- cbind(inflam_combined_n[2:3], name = do.call(pmax, c(inflam_combined_n[4], na.rm = TRUE)))%>% filter(is.na(level3)) %>% dplyr::select(1,3)
+colnames(b) <- c("name", "n")
+inflam_combined_level_2_3 <- rbind(a, b)
+
+```
+ 
+### Convert igraph obj to network d3obj, then use networkd3 functions to manipulate dfs
+```{r}
+
+inflam_d3 <- igraph_to_networkD3(inflam_g) # convert igraph obj to networkd3 obj
+
 membership_custom <-  merge(inflam_d3$nodes, membership_custom, on= "name") # merge node df and the new df grouped by domain to get desired color groupings
 inflam_d3$nodes <-  membership_custom[match(inflam_d3$nodes$name, membership_custom$name),] # order vars according to the data.tree obj's original order
- 
 
-inflam_fn <- forceNetwork(Links = inflam_d3$links, Nodes = inflam_d3$nodes ,
-             Source = 'source', Target = 'target', NodeID = 'name',  Group = 'l1_id', # get node id and group from d3$node
-            opacity = 0.9,  zoom = TRUE, legend = TRUE, linkDistance = 25, radiusCalculation = 1.5, 
-             charge = -15,   # node repulsion 
-             fontSize = 25, fontFamily = "Calibri", Nodesize = 1
-             ) 
+rnames <- rownames(inflam_d3$nodes)
 
- inflam_fn %>% saveNetwork("inflam_net.html")
+inflam_d3$nodes$idx <- as.integer(rownames(inflam_d3$nodes))
+
+join_inflam_d3_group_n <- full_join( inflam_d3$nodes, inflam_combined_level_2_3, on = "name")  %>% replace(is.na(.), 0)
+inflam_d3$nodes <- merge(inflam_d3$nodes, join_inflam_d3_group_n, by=c("name", "l1_id", "idx"), all.x = TRUE)# %>% dplyr::select()
+
+inflam_d3$nodes <- inflam_d3$nodes[as.integer(rnames), ] # order the rows by the orignal index number order
+inflam_d3$nodes$name <- paste0(inflam_d3$nodes$name, ": ", inflam_d3$nodes$n)
  
-V(inflam_g)
 ```
+
+### Use forceNetwork to create networkD3 graph
+```{r}
+inflam_fn <- forceNetwork(Links = inflam_d3$links, Nodes = inflam_d3$nodes ,
+             Source = 'source', Target = 'target', NodeID = 'name',  Group = 'l1_id', # get NodeID and Group from inflam_d3$node
+            opacity = 0.9,  zoom = TRUE, legend = TRUE, linkDistance = 10,  
+             charge = -50,   # node repulsion   
+            Nodesize  = "n" ,
+         fontSize = 20, fontFamily = "Calibri" )  
+         
+htmlwidgets::onRender(inflam_fn, jsCode = ' 
+  function (el, x) {
+    d3.select("svg").append("g").attr("id", "legend-layer");
+    var legend_layer = d3.select("#legend-layer");
+    d3.selectAll(".legend")
+      .each(function() { legend_layer.append(() => this); }); 
+      
+  }')   %>% saveNetwork("inflam_net_test.html")
+ 
+webshot("inflam_net_test.html", "inflam_net_test.jpeg", vwidth = 1700, vheight = 1700, zoom = 1.2) 
+ 
+```
+exp
