@@ -25,19 +25,18 @@ colnames<- colnames[lapply(colnames, function(x) length(grep("Please|Is.this|Wha
 length(unique(colnames))
 
 # === classify each column name into levels 1, 2 vs. 3 === 
-redcap_output <- gage_bd_redcap_output[colnames]  %>%   gage_bd_redcap_output[colnames]  %>%  select(-head(names(.), 2)) %>% mutate_all(., na_if, y = "") %>% distinct() 
+redcap_output <-  gage_bd_redcap_output[colnames] %>% select(-head(names(.), 2)) %>% mutate_if(is.factor, na_if, y = "") %>% distinct() 
 
 
 length(sort(unique(redcap_output$Domain.Main.category.of.the.variable.))) # there are a total of 20 level1 categories
 
 # get the col names of the level 1 categories 
 l1Cols <- c("Type.of.clinical.characteristics.", "Clinical.Trial..Specific..type.", "Cognitive.type.", "Course.of.bipolar.illness.episodes.type.", 
-           "Course.of.bipolar.illness.symptoms.type." ,   "Course.of.non.bipolar.psychiatric.illness.type.",  "Course.of.treatment.type." , ".illness.severity.type.", 
+           "Course.of.bipolar.illness.symptoms.type." ,   "Course.of.non.bipolar.psychiatric.illness.type.",  "Course.of.treatment.type." , "Current.illness.severity.type.", 
            "Current.pharmacological.treatment.type.",  "Type.of.demographics." ,   "Ecological.Momentary.Assessment.type.",  "Family.history.type.",
            "Lifetime.pharmacological.treatment.type.", "Type.of.Metadata.", "Miscellaneous.type." , "Other.non.pharmacological.treatment.type.", 
-           "Physical.health.type.",  "Physiological.type.", "Positive.Psychological.Factors.type.", "Trauma.Stress..type." ) 
-
-l1_df <- cbind(redcap_output[1], redcap_output[l1Cols]) 
+           "Physical.health.type.",  "Physiological.type.", "Positive.Psychological.Factors.type.", "Trauma.Stress..type.") 
+l1_df <- cbind(redcap_output[1], redcap_output %>% select(l1Cols))
 groupbyl1 <- cbind(l1_df[1], l2 = do.call(pmax, c(l1_df[-1], na.rm = TRUE))) %>% distinct()   # collapse all level2 vars into one column (l2) and remove duplicate rows
 
 ```
@@ -50,10 +49,10 @@ redcap_output %>% dplyr::select(!all_of(l1Cols))  %>% colnames() %>% sort()  # o
 groupbyl1 %>% arrange(Domain.Main.category.of.the.variable., l2)
  
 # fill in the two lists below using the variable names in the output above, based on the levels from varicat_ontology.csv
-l2Cols <- c("Comorbidities.type.", "Depressive.Episode.Course.type.", "Drug.class.type.", "ECT.type.", "First.episode.features.type.", "Functioning.type.", "General.Episodic.Features.type.", "Global.type.", "History.of.non.bipolar.diagnosis.type.", "Hypomanic.Episode.Course.type.", "Imaging.type.", "Lab.work.type.", "Lifetime.drug.class.type.", "Manic.Episode.Course.type.", "Medication.adherence.type.", "Mixed.Episode.Course.type.", "Physical.Abuse.type.", "Physical.Measurements.type.", "Psychotic.Episode.Course.type.", "Sexual.Abuse.type.", "Sleep.circadian.rhythms.type.", "Smoking.type.", "Substance.use.type.", "Type.of.current.diagnosis.", "Type.of.history.of.psych.symptom.variables.", "Type.of.hospitalization.variables.", "Type.of.suicidality.variables.")
+l2Cols <- c("Comorbidities.type.", "Depressive.Episode.Course.type.", "Drug.class.type.", "ECT.type.", "First.episode.features.type.", "Functioning.type.", "General.Episodic.Features.type.", "Global.type.", "History.of.non.bipolar.diagnosis.type.", "Hypomanic.Episode.Course.type.", "Imaging.type.", "Lab.work.type.", "Lifetime.drug.class.type.", "Manic.Episode.Course.type.", "Medication.adherence.type.", "Mixed.Episode.Course.type.", "Physical.Abuse.type.", "Physical.Measurements.type.", "Psychotic.Episode.Course.type.", "Sexual.Abuse.type.", "Sleep.circadian.rhythms.type.", "Smoking.type.", "Substance.use.type.", "Type.of.current.diagnosis.", "Type.of.history.of.psych.symptom.variables.", "Type.of.hospitalization.variables.", "Type.of.suicidality.variables.", "Subject identifier", "Visit (baseline, follow-up, etc)", "Age at enrollment", "Sex / Gender / Gender Identity", "Race", "Ethnicity / cultural group", "Relationship status", "Living situation", "Education", "Occupational status", "Language spoken", "Current diagnosis", "Age at onset (indicate 'onset of what?' in description)", "Depressive episode course", "Manic episode course", "Age at first psychiatric treatment", "History of ECT", "Psychiatric disorders/Mental illness", "Smoking", "Substance Use", "Physical Measurements", "Visual-Motor Ability", "Memory and Learning", "Verbal Ability", "Executive Functioning", "Processing speed", "Global", "Emotional Intelligence", "Depression symptoms", "Mania symptoms", "Functioning", "Decision Making", "Social Intelligence / Perception", "Overall symptom severity", "Comorbidities", "Anxiety symptoms", "Fatigue associated with depression", "Sleep/circadian rhythms", "Psychotic symptoms", "Age at visit", "Veteran status", "Socioeconomic status / class", "Attention/Vigilance", "Stress", "Reproductive Health", "Lab work", "Nutrition / Eating", "Drug class", "Medication adherence", "Suicidality symptoms", "Duration of euthymia", "Hospitalizations", "Suicidality", "Age at onset of depression symptoms", "Mixed episode course", "Hypomanic episode course", "Age at onset of mixed symptoms", "General episodic features", "Age at onset of hypomania symptoms", "Duration of illness (indicate in variable description how)", "History of psychotic symptoms", "Impulsivity", "Apathy", "Physical Activity", "Life Satisfaction", "Resilience", "Happiness", "Subjective cognitive performance", "Empathy / Compassion", "Social support", "Optimism", "Insurance coverage", "Mobile self-report of activities", "Mobile self-report of sleep", "Mobile mood / affect ratings", "Adverse effects", "Substance or alcohol abuse/dependence", "First episode features", "Motor Ability", "Psychosocial / therapy", "History of non-bipolar diagnosis", "Any children/ number of children", "Country of origin", "Physical abuse", "Sexual abuse", "Psychotic episode course", "Age at onset of mania symptoms", "Suicide")
 
-
-l3Cols <- c("Anticonvulsants.Mood.Stabilizers.type.", "Antidepressant.type.", "Antipsychotic.type.", "Global.physical.comorbidity.type.", "Heart.type.","Li.Lithium..type.", "Lifetime.Anticonvulsants.Mood.Stabilizers.type.", "Lifetime.Antidepressant.type.", "Lifetime.Antipsychotic.type.", "Lifetime.Li.Lithium..type.", "Lifetime.Non.psychiatric.medication.type.", "Lifetime.Other.drug.type.", "Lifetime.Polypharmacy.drug.type.", "Lifetime.Sedative.Hypnotics.type.", "Lifetime.Stimulants.type.", "Non.psychiatric.medication.type.", "Other.drug.type.", "Polypharmacy.drug.type.", "Saliva..skin..hair.type.", "Sedative.Hypnotics.type.", "Stimulants.type.", "Vascular.type.")
+            
+l3Cols <- c("Anticonvulsants.Mood.Stabilizers.type.", "Antidepressant.type.", "Antipsychotic.type.", "Global.physical.comorbidity.type.", "Heart.type.","Li.Lithium..type.", "Lifetime.Anticonvulsants.Mood.Stabilizers.type.", "Lifetime.Antidepressant.type.", "Lifetime.Antipsychotic.type.", "Lifetime.Li.Lithium..type.", "Lifetime.Non.psychiatric.medication.type.", "Lifetime.Other.drug.type.", "Lifetime.Polypharmacy.drug.type.", "Lifetime.Sedative.Hypnotics.type.", "Lifetime.Stimulants.type.", "Non.psychiatric.medication.type.", "Other.drug.type.", "Polypharmacy.drug.type.", "Saliva..skin..hair.type.", "Sedative.Hypnotics.type.", "Stimulants.type.", "Vascular.type.", "Other")
 
 ```
  
